@@ -4,3 +4,525 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TTB Label Verifier</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f4f6f9;
+      color: #222;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #1a3a5c;
+      color: white;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    header .seal { font-size: 2rem; }
+    header h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: 0.02em; }
+    header p { font-size: 0.85rem; opacity: 0.8; margin-top: 2px; }
+
+    .container { max-width: 860px; margin: 0 auto; padding: 32px 20px; }
+
+    /* Tab switcher */
+    .tabs { display: flex; gap: 0; margin-bottom: 28px; border-bottom: 3px solid #1a3a5c; }
+    .tab-btn {
+      padding: 12px 32px;
+      font-size: 1rem;
+      font-weight: 600;
+      background: #dce4ee;
+      border: none;
+      cursor: pointer;
+      color: #1a3a5c;
+      border-radius: 6px 6px 0 0;
+      transition: background 0.15s;
+    }
+    .tab-btn.active { background: #1a3a5c; color: white; }
+    .tab-btn:hover:not(.active) { background: #c5d0e0; }
+
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* Cards */
+    .card {
+      background: white;
+      border-radius: 10px;
+      padding: 28px 32px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      margin-bottom: 24px;
+    }
+    .card h2 { font-size: 1.1rem; color: #1a3a5c; margin-bottom: 18px; border-bottom: 1px solid #e0e7ef; padding-bottom: 10px; }
+
+    /* Upload area */
+    .upload-area {
+      border: 3px dashed #6b8cae;
+      border-radius: 10px;
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      background: #f8fafc;
+      position: relative;
+    }
+    .upload-area:hover, .upload-area.dragover { border-color: #1a3a5c; background: #eef3f9; }
+    .upload-area input[type=file] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .upload-icon { font-size: 3rem; margin-bottom: 10px; }
+    .upload-area p { font-size: 1rem; color: #555; }
+    .upload-area .hint { font-size: 0.82rem; color: #888; margin-top: 6px; }
+    .preview-img { max-height: 220px; max-width: 100%; border-radius: 8px; margin-top: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+    .file-name { margin-top: 8px; font-size: 0.9rem; color: #1a3a5c; font-weight: 600; }
+
+    /* Form fields */
+    .fields-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; }
+    @media (max-width: 600px) { .fields-grid { grid-template-columns: 1fr; } }
+
+    label { display: block; font-size: 0.88rem; font-weight: 600; color: #444; margin-bottom: 4px; }
+    .required-star { color: #c0392b; }
+    input[type=text] {
+      width: 100%; padding: 10px 14px; font-size: 0.97rem;
+      border: 2px solid #c9d6e3; border-radius: 6px; outline: none;
+      transition: border-color 0.15s;
+    }
+    input[type=text]:focus { border-color: #1a3a5c; }
+    .field-hint { font-size: 0.78rem; color: #888; margin-top: 3px; }
+    .field-full { grid-column: 1 / -1; }
+
+    /* Submit button */
+    .btn-verify {
+      width: 100%; padding: 16px; font-size: 1.2rem; font-weight: 700;
+      background: #1a3a5c; color: white; border: none; border-radius: 8px;
+      cursor: pointer; margin-top: 8px; letter-spacing: 0.03em;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn-verify:hover { background: #264d7a; }
+    .btn-verify:active { transform: scale(0.99); }
+    .btn-verify:disabled { background: #8fa8c0; cursor: not-allowed; }
+
+    /* Results */
+    .result-card { border-radius: 10px; padding: 24px 28px; margin-top: 24px; }
+    .result-card.pass { background: #eafaf1; border: 2px solid #27ae60; }
+    .result-card.fail { background: #fdedec; border: 2px solid #c0392b; }
+
+    .result-header { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+    .result-icon { font-size: 2.6rem; }
+    .result-label { font-size: 1.4rem; font-weight: 700; }
+    .result-label.pass { color: #1e8449; }
+    .result-label.fail { color: #922b21; }
+    .result-filename { font-size: 0.85rem; color: #666; margin-top: 2px; }
+
+    .fields-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+    .fields-table th {
+      text-align: left; padding: 8px 12px; background: rgba(0,0,0,0.05);
+      font-weight: 700; color: #333; border-bottom: 2px solid rgba(0,0,0,0.1);
+    }
+    .fields-table td { padding: 9px 12px; border-bottom: 1px solid rgba(0,0,0,0.07); vertical-align: top; }
+    .fields-table tr:last-child td { border-bottom: none; }
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; }
+    .badge.pass { background: #d5f5e3; color: #1e8449; }
+    .badge.fail { background: #fadbd8; color: #922b21; }
+    .badge.skip { background: #eaf0fb; color: #2471a3; }
+    .note-text { font-size: 0.8rem; color: #922b21; margin-top: 3px; }
+
+    /* Loading spinner */
+    .spinner {
+      display: none; align-items: center; justify-content: center; gap: 12px;
+      padding: 18px; font-size: 1rem; color: #555;
+    }
+    .spinner.active { display: flex; }
+    .spin { width: 28px; height: 28px; border: 4px solid #c9d6e3; border-top-color: #1a3a5c; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Batch extras */
+    .batch-file-list { list-style: none; margin-top: 10px; }
+    .batch-file-list li { font-size: 0.87rem; color: #444; padding: 4px 0; display: flex; align-items: center; gap: 8px; }
+    .batch-file-list li::before { content: "📄"; }
+
+    .batch-summary { display: flex; gap: 24px; margin-bottom: 20px; flex-wrap: wrap; }
+    .summary-box { flex: 1; min-width: 120px; background: white; border-radius: 8px; padding: 16px 20px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+    .summary-num { font-size: 2rem; font-weight: 700; }
+    .summary-num.total { color: #1a3a5c; }
+    .summary-num.pass { color: #1e8449; }
+    .summary-num.fail { color: #c0392b; }
+    .summary-lbl { font-size: 0.82rem; color: #666; margin-top: 4px; }
+
+    .batch-result-item { margin-bottom: 16px; }
+    .batch-result-item summary { cursor: pointer; padding: 10px 14px; background: white; border-radius: 8px; border-left: 5px solid #ccc; display: flex; align-items: center; gap: 10px; font-weight: 600; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+    .batch-result-item[data-pass=true] summary { border-left-color: #27ae60; }
+    .batch-result-item[data-pass=false] summary { border-left-color: #c0392b; }
+    .batch-result-item .detail { padding: 14px 16px 4px; background: #fafbfc; border-radius: 0 0 8px 8px; border: 1px solid #e4eaf2; border-top: none; }
+
+    .error-box { background: #fdedec; border: 1px solid #c0392b; border-radius: 8px; padding: 14px 18px; color: #7b241c; font-size: 0.9rem; margin-top: 12px; }
+
+    .csv-hint { font-size: 0.82rem; color: #666; margin-top: 10px; }
+    .csv-hint code { background: #eef3f9; padding: 1px 5px; border-radius: 3px; font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="seal">🏛️</div>
+  <div>
+    <h1>TTB Alcohol Label Verifier</h1>
+    <p>AI-powered label compliance review tool</p>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('single')">Single Label</button>
+    <button class="tab-btn" onclick="switchTab('batch')">Batch Upload</button>
+  </div>
+
+  <!-- ========== SINGLE LABEL PANEL ========== -->
+  <div id="panel-single" class="panel active">
+
+    <div class="card">
+      <h2>Step 1 — Upload Label Image</h2>
+      <div class="upload-area" id="drop-single" ondragover="handleDragOver(event,'drop-single')" ondragleave="handleDragLeave('drop-single')" ondrop="handleDrop(event,'img-single','preview-single','name-single')">
+        <input type="file" id="img-single" accept="image/*" onchange="previewImage(this,'preview-single','name-single')" />
+        <div class="upload-icon">🖼️</div>
+        <p><strong>Click to choose</strong> or drag &amp; drop a label image</p>
+        <p class="hint">JPEG, PNG, or WebP accepted</p>
+        <img id="preview-single" class="preview-img" style="display:none" />
+        <p id="name-single" class="file-name"></p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Step 2 — Enter Application Data</h2>
+      <div class="fields-grid">
+        <div>
+          <label>Brand Name <span class="required-star">*</span></label>
+          <input type="text" id="s-brand" placeholder="e.g. OLD TOM DISTILLERY" />
+        </div>
+        <div>
+          <label>Class / Type</label>
+          <input type="text" id="s-class" placeholder="e.g. Kentucky Straight Bourbon Whiskey" />
+        </div>
+        <div>
+          <label>Alcohol Content</label>
+          <input type="text" id="s-abv" placeholder="e.g. 45% Alc./Vol. (90 Proof)" />
+        </div>
+        <div>
+          <label>Net Contents</label>
+          <input type="text" id="s-vol" placeholder="e.g. 750 mL" />
+        </div>
+        <div>
+          <label>Producer / Bottler Name</label>
+          <input type="text" id="s-producer" placeholder="e.g. Old Tom Distillery LLC" />
+        </div>
+        <div>
+          <label>Producer Address</label>
+          <input type="text" id="s-addr" placeholder="e.g. Louisville, KY 40201" />
+        </div>
+        <div>
+          <label>Country of Origin</label>
+          <input type="text" id="s-country" placeholder="Leave blank if domestic" />
+          <p class="field-hint">Leave blank if not required / not stated</p>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-verify" onclick="verifySingle()">🔍 Verify Label</button>
+
+    <div class="spinner" id="spin-single">
+      <div class="spin"></div>
+      <span>Analyzing label with AI — usually under 5 seconds…</span>
+    </div>
+
+    <div id="result-single"></div>
+  </div>
+
+  <!-- ========== BATCH PANEL ========== -->
+  <div id="panel-batch" class="panel">
+
+    <div class="card">
+      <h2>Step 1 — Upload Label Images</h2>
+      <div class="upload-area" id="drop-batch" ondragover="handleDragOver(event,'drop-batch')" ondragleave="handleDragLeave('drop-batch')" ondrop="handleDropBatch(event)">
+        <input type="file" id="img-batch" accept="image/*" multiple onchange="updateBatchFileList()" />
+        <div class="upload-icon">📁</div>
+        <p><strong>Click to choose</strong> or drag &amp; drop multiple label images</p>
+        <p class="hint">JPEG, PNG, or WebP -— select as many as needed</p>
+      </div>
+      <ul class="batch-file-list" id="batch-file-list"></ul>
+    </div>
+
+    <div class="card">
+      <h2>Step 2 — Enter Application Data (JSON)</h2>
+      <p style="font-size:0.9rem;color:#555;margin-bottom:12px;">
+        Paste a JSON array with one entry per label, <strong>in the same order</strong> as your images.
+        Only <code>brand_name</code> is required; other fields are optional.
+      </p>
+      <textarea id="batch-json" rows="10" style="width:100%;font-family:monospace;font-size:0.85rem;padding:10px;border:2px solid #c9d6e3;border-radius:6px;resize:vertical;" placeholder='[
+  {
+    "brand_name": "OLD TOM DISTILLERY",
+    "class_type": "Kentucky Straight Bourbon Whiskey",
+    "alcohol_content": "45% Alc./Vol. (90 Proof)",
+    "net_contents": "750 mL",
+    "producer_name": "Old Tom Distillery LLC",
+    "producer_address": "Louisville, KY 40201",
+    "country_of_origin": null
+  },
+  {
+    "brand_name": "BLUE RIDGE WINERY",
+    "class_type": "Cabernet Sauvignon"
+  }
+]'></textarea>
+    </div>
+
+    <button class="btn-verify" onclick="verifyBatch()">🔍 Furry All Labels</button>
+
+    <div class="spinner" id="spin-batch">
+      <div class="spin"></div>
+      <span id="spin-batch-msg">Analyzing labels — this may take a moment for large batches…</span>
+    </div>
+
+    <div id="result-batch"></div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+// ---- Tab switching ----
+function switchTab(tab) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + tab).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ---- Image preview ----
+function previewImage(input, previewId, nameId) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = document.getElementById(previewId);
+    img.src = e.target.result;
+    img.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+  document.getElementById(nameId).textContent = file.name;
+}
+
+// ---- Drag & drop ----
+function handleDragOver(e, id) {
+  e.preventDefault();
+  document.getElementById(id).classList.add('dragover');
+}
+function handleDragLeave(id) {
+  document.getElementById(id).classList.remove('dragover');
+}
+function handleDrop(e, inputId, previewId, nameId) {
+  e.preventDefault();
+  document.getElementById(e.currentTarget.id).classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  const input = document.getElementById(inputId);
+  input.files = dt.files;
+  previewImage(input, previewId, nameId);
+}
+function handleDropBatch(e) {
+  e.preventDefault();
+  document.getElementById('drop-batch').classList.remove('dragover');
+  const files = e.dataTransfer.files;
+  if (!files.length) return;
+  const dt = new DataTransfer();
+  for (const f of files) dt.items.add(f);
+  document.getElementById('img-batch').files = dt.files;
+  updateBatchFileList();
+}
+function updateBatchFileList() {
+  const files = document.getElementById('img-batch').files;
+  const list = document.getElementById('batch-file-list');
+  list.innerHTML = '';
+  for (const f of files) {
+    const li = document.createElement('li');
+    li.textContent = f.name;
+    list.appendChild(li);
+  }
+}
+
+// ---- Single verify ----
+async function verifySingle() {
+  const imgInput = document.getElementById('img-single');
+  if (!imgInput.files[0]) { alert('Please upload a label image first.'); return; }
+  const brand = document.getElementById('s-brand').value.trim();
+  if (!brand) { alert('Brand Name is required.'); return; }
+
+  const appData = {
+    brand_name: brand,
+    class_type: document.getElementById('s-class').value.trim() || null,
+    alcohol_content: document.getElementById('s-abv').value.trim() || null,
+    net_contents: document.getElementById('s-vol').value.trim() || null,
+    producer_name: document.getElementById('s-producer').value.trim() || null,
+    producer_address: document.getElementById('s-addr').value.trim() || null,
+    country_of_origin: document.getElementById('s-country').value.trim() || null,
+  };
+
+  const btn = document.querySelector('#panel-single .btn-verify');
+  btn.disabled = true;
+  document.getElementById('spin-single').classList.add('active');
+  document.getElementById('result-single').innerHTML = '';
+
+  const form = new FormData();
+  form.append('label_image', imgInput.files[0]);
+  form.append('app_data', JSON.stringify(appData));
+
+  try {
+    const resp = await fetch('/verify', { method: 'POST', body: form });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || resp.statusText);
+    renderSingleResult(data);
+  } catch (err) {
+    document.getElementById('result-single').innerHTML = `<div class="error-box">❌ Error: ${err.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    document.getElementById('spin-single').classList.remove('active');
+  }
+}
+
+function renderSingleResult(r) {
+  if (r.error) {
+    document.getElementById('result-single').innerHTML = `<div class="error-box">❌ ${r.error}</div>`;
+    return;
+  }
+  document.getElementById('result-single').innerHTML = buildResultHTML(r);
+}
+
+function buildResultHTML(r) {
+  const passClass = r.overall_passed ? 'pass' : 'fail';
+  const icon = r.overall_passed ? '✅' : '❌';
+  const label = r.overall_passed ? 'APPROVED' : 'REJECTED';
+
+  let rows = '';
+  const FIELD_LABELS = {
+    brand_name: 'Brand Name',
+    class_type: 'Class / Type',
+    alcohol_content: 'Alcohol Content',
+    net_contents: 'Net Contents',
+    producer_name: 'Producer Name',
+    producer_address: 'Producer Address',
+    country_of_origin: 'Country of Origin',
+    government_warning: 'Government Warning',
+  };
+
+  for (const f of r.fields) {
+    const badge = f.note === 'Not provided in application — not checked'
+      ? '<span class="badge skip">SKIPPED</span>'
+      : f.passed
+        ? '<span class="badge pass">PASS</span>'
+        : '<span class="badge fail">FAIL</span>';
+
+    const expected = f.expected
+      ? (f.field === 'government_warning' ? '<em>(standard TTB warning)</em>' : escHtml(f.expected))
+      : '<em>—</em>';
+    const extracted = f.extracted ? escHtml(f.extracted) : '<em>not found</em>';
+
+    rows += `<tr>
+      <td><strong>${FIELD_LABELS[f.field] || f.field}</strong>${f.note && !f.passed ? `<div class="note-text">⚠ ${escHtml(f.note)}</div>` : ''}</td>
+      <td>${expected}</td>
+      <td>${extracted}</td>
+      <td>${badge}</td>
+    </tr>`;
+  }
+
+  return `
+    <div class="result-card ${passClass}">
+      <div class="result-header">
+        <span class="result-icon">${icon}</span>
+        <div>
+          <div class="result-label ${passClass}">${label}</div>
+          <div class="result-filename">${escHtml(r.filename)}</div>
+        </div>
+      </div>
+      <table class="fields-table">
+        <thead><tr><th>Field</th><th>Application</th><th>Label (extracted)</th><th>Result</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+// ---- Batch verify ----
+async function verifyBatch() {
+  const imgInput = document.getElementById('img-batch');
+  if (!imgInput.files.length) { alert('Please upload at least one label image.'); return; }
+
+  let appDataList;
+  try {
+    appDataList = JSON.parse(document.getElementById('batch-json').value);
+    if (!Array.isArray(appDataList)) throw new Error('Must be a JSON array.');
+  } catch (e) {
+    alert('Invalid JSON in application data field: ' + e.message);
+    return;
+  }
+
+  if (imgInput.files.length !== appDataList.length) {
+    alert(`You uploaded ${imgInput.files.length} image(s) but provided ${appDataList.length} application data entries. They must match.`);
+    return;
+  }
+
+  const btn = document.querySelector('#panel-batch .btn-verify');
+  btn.disabled = true;
+  const spinMsg = document.getElementById('spin-batch-msg');
+  spinMsg.textContent = `Analyzing ${imgInput.files.length} label(s) — please wait…`;
+  document.getElementById('spin-batch').classList.add('active');
+  document.getElementById('result-batch').innerHTML = '';
+
+  const form = new FormData();
+  for (const f of imgInput.files) form.append('label_images', f);
+  form.append('app_data_list', JSON.stringify(appDataList));
+
+  try {
+    const resp = await fetch('/verify/batch', { method: 'POST', body: form });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || resp.statusText);
+    renderBatchResult(data);
+  } catch (err) {
+    document.getElementById('result-batch').innerHTML = `<div class="error-box">❌ Error: ${err.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    document.getElementById('spin-batch').classList.remove('active');
+  }
+}
+
+function renderBatchResult(data) {
+  const container = document.getElementById('result-batch');
+  let html = `<div class="batch-summary">
+    <div class="summary-box"><div class="summary-num total">${data.total}</div><div class="summary-lbl">Total Labels</div></div>
+    <div class="summary-box"><div class="summary-num pass">${data.passed}</div><div class="summary-lbl">Approved</div></div>
+    <div class="summary-box"><div class="summary-num fail">${data.failed}</div><div class="summary-lbl">Rejected</div></div>
+  </div>`;
+
+  for (const r of data.results) {
+    const icon = r.overall_passed ? '✅' : '❌';
+    const status = r.overall_passed ? 'APPROVED' : 'REJECTED';
+    const detailHTML = r.error
+      ? `<div class="error-box">❌ ${escHtml(r.error)}</div>`
+      : buildResultHTML(r);
+
+    html += `<details class="batch-result-item" data-pass="${r.overall_passed}">
+      <summary>${icon} <span>${escHtml(r.filename)}</span> — <span style="color:${r.overall_passed?'#1e8449':'#922b21'}">${status}</span></summary>
+      <div class="detail">${detailHTML}</div>
+    </details>`;
+  }
+
+  container.innerHTML = html;
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
